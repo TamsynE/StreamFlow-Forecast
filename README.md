@@ -26,8 +26,12 @@ You can install Hydrofunctions with pip install hydrofunctions.
 As provided by my professor, we can download historic river flow from the Trinity River Burnt Ranch Gorge sensor like this:
 
 import hydrofunctions as hf
+
 trinity_burnt_ranch_id = '11527000'
+
 nwis_data = hf.NWIS(trinity_burnt_ranch_id, 'iv', start_date='2023-06-01', end_date='2023-06-05')
+
 df = nwis_data.df('discharge')[:]
+
 
 Once the streamflow data has been obtained, we can perform the necessary calculations and plotting.
