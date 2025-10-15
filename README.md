@@ -23,7 +23,7 @@ See sample graph below:
 ## Hydrofunctions Module
 You can install Hydrofunctions with pip install hydrofunctions.
 
-As provided by my professor, we can download historic river flow from the Trinity River Burnt Ranch Gorge sensor like this:
+We can download historic river flow from the Trinity River Burnt Ranch Gorge sensor like this:
 
 import hydrofunctions as hf
 
