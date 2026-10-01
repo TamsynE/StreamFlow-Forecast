@@ -3,7 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib
 import numpy as np
-matplotlib.use('TkAgg')
+matplotlib.use('MacOSX')
 from datetime import datetime, timedelta
 
 curr_year = str(datetime.now().year)
@@ -130,12 +130,10 @@ full_timeseries_ordinals = np.arange(df_all.index.size)
 y_values = df_curr_cpy['CFS'] # Y
 test_values = zip(two_weeks_ordinals, y_values) # combine
 
-# CALCULATE LINEAR REGRESSION
-mean_x = two_weeks_ordinals.mean()
-mean_y = df_curr['CFS'].mean()
-gradient = df_curr_cpy['CFS'].diff() / df_curr_cpy['CFS'].index.to_series().diff().dt.total_seconds()
-
-intercept = mean_y - (gradient * mean_x)
+# CALCULATE LINEAR REGRESSION (proper least-squares fit over the current window,
+# instead of a per-step rate-of-change array, so the forecast connects smoothly)
+valid = ~y_values.isna().to_numpy()
+gradient, intercept = np.polyfit(two_weeks_ordinals[valid], y_values.to_numpy()[valid], 1)
 x1 = max(two_weeks_ordinals)
 x2 = max(full_timeseries_ordinals)
 y1 = gradient * x1 + intercept
@@ -147,14 +145,21 @@ df_plot = df[['datetimeUTC'] + columns_to_plot].copy()
 
 # Convert 'datetimeUTC' to datetime format
 df_plot['datetimeUTC'] = pd.to_datetime(df_plot['datetimeUTC'])
-future_values = np.round(two_weeks_ordinals * (gradient) + intercept, 0)
+future_ordinals = np.arange(two_weeks_ordinals.size, full_timeseries_ordinals.size)
+future_values = np.round(future_ordinals * gradient + intercept, 0)
 
 # Create a new column 'Future' in df_plot
 df_plot['Future'] = np.nan
 first_nan_index = df['CFS'].isnull().idxmax()
 
 # Set values in 'Future' column starting at first_nan_index
-df_plot['Future'].iloc[first_nan_index:] = future_values[0:full_timeseries_ordinals.size - two_weeks_ordinals.size]
+n_target = len(df_plot) - first_nan_index
+future_slice = future_values[0:full_timeseries_ordinals.size - two_weeks_ordinals.size]
+if len(future_slice) > n_target:
+    future_slice = future_slice[:n_target]
+elif len(future_slice) < n_target:
+    future_slice = np.concatenate([future_slice, np.full(n_target - len(future_slice), np.nan)])
+df_plot.iloc[first_nan_index:, df_plot.columns.get_loc('Future')] = future_slice
 
 # PLOT
 plt.figure(figsize=(10, 6))
@@ -166,8 +171,11 @@ plt.plot(df_plot['datetimeUTC'], df_plot['Lower'], color='grey', alpha=0.5)
 plt.fill_between(df_plot['datetimeUTC'], df_plot['Upper'], df_plot['Lower'], color="lightgrey")
 plt.plot(df_plot['datetimeUTC'], df_plot['Future'], color='black')
 
-# Plot a vertical line at the inputted date
-plt.axvline(x=mid_full, color='red', linestyle='dashed', label=f"{mid_full.strftime('%B %d %H:%M')}")
+# Plot a vertical line at the actual current-data/forecast boundary (not just
+# midnight of the inputted date -- NWIS returns data through the END of that day
+# in local time, so the real cutoff is ~24h later than a naive midnight timestamp)
+transition_time = df_plot['datetimeUTC'].iloc[first_nan_index]
+plt.axvline(x=transition_time, color='red', linestyle='dashed', label=f"{transition_time.strftime('%B %d %H:%M')}")
 
 #Format x-axis labels to display only month and day
 plt.gca().xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%B %d'))
